@@ -3,14 +3,9 @@ import { useAuthStore } from '../../store/authStore';
 
 export default function ProtectedRoute({ allowedRoles = [] }) {
   const { isAuthenticated, user } = useAuthStore();
-
-  if (!isAuthenticated) return <Navigate to='/login' replace />;
-
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (allowedRoles.length > 0 && !allowedRoles.includes(user?.role)) {
-    return <Navigate to='/dashboard' replace />;
+    return <Navigate to="/dashboard" replace />;
   }
-
   return <Outlet />;
 }
-
-// Role hierarchy from backend:  citizen → reviewer → admin → super_admin

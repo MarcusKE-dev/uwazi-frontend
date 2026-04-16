@@ -1,12 +1,10 @@
 import { useAuthStore } from '../store/authStore';
+import { ROLES } from '../constants/roles';
 
 export function useAuth() {
   const { user, isAuthenticated, clearAuth } = useAuthStore();
-
-  const hasRole = (...roles) => roles.includes(user?.role);
-  const isAdmin      = hasRole('admin', 'super_admin');
-  const isReviewer   = hasRole('reviewer', 'admin', 'super_admin');
-  const isSuperAdmin = hasRole('super_admin');
-
+  const isAdmin      = ['admin', 'super_admin'].includes(user?.role);
+  const isReviewer   = ['reviewer', 'admin', 'super_admin'].includes(user?.role);
+  const isSuperAdmin = user?.role === ROLES.SUPER_ADMIN;
   return { user, isAuthenticated, isAdmin, isReviewer, isSuperAdmin, clearAuth };
 }

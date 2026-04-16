@@ -3,41 +3,6 @@
 @tailwind utilities;
 
 @layer base {
-  html {
-    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-  }
-  body {
-    @apply bg-gray-50 dark:bg-uwazi-navy text-gray-900 dark:text-white;
-  }
-  /* Scrollbar styling for dark mode */
-  ::-webkit-scrollbar       { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #1B3A6B; border-radius: 4px; }
-}
-
-@layer components {
-  .btn-primary {
-    @apply bg-uwazi-blue text-white px-4 py-2 rounded-lg font-semibold text-sm
-           hover:bg-uwazi-accent active:scale-95 transition-all duration-150;
-  }
-  .btn-secondary {
-    @apply bg-white text-uwazi-blue border border-uwazi-pale px-4 py-2 rounded-lg
-           font-semibold text-sm hover:bg-uwazi-mist transition-all duration-150
-           dark:bg-uwazi-dark dark:text-blue-300 dark:border-blue-900/50;
-  }
-  .btn-danger {
-    @apply bg-red-600 text-white px-4 py-2 rounded-lg font-semibold text-sm
-           hover:bg-red-700 active:scale-95 transition-all duration-150;
-  }
-  .input-base {
-    @apply w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm
-           text-gray-900 outline-none focus:border-uwazi-blue focus:ring-2
-           focus:ring-uwazi-pale transition-all
-           dark:bg-uwazi-dark dark:border-blue-900/50 dark:text-white
-           dark:focus:border-blue-500;
-  }
-  .card-base {
-    @apply bg-white rounded-xl border border-gray-200 shadow-sm
-           dark:bg-uwazi-dark dark:border-blue-900/50;
-  }
+  html { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+  body { @apply bg-slate-50 dark:bg-uwazi-navy text-slate-900 dark:text-white; }
 }

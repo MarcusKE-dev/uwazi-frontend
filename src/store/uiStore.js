@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 
 export const useUIStore = create(persist(
   (set) => ({
-    darkMode: false,
+    darkMode:    false,
     sidebarOpen: true,
     toggleDarkMode: () => set((state) => {
       const next = !state.darkMode;

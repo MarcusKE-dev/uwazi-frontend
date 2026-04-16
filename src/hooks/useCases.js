@@ -5,8 +5,7 @@ export function useCases(filters = {}) {
   return useQuery({
     queryKey: ['cases', filters],
     queryFn:  () => casesService.getAll(filters),
-    // After interceptor: payload = { cases: [...] }
-    // Access in components as: data?.cases
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -15,15 +14,15 @@ export function useCase(id) {
     queryKey: ['case', id],
     queryFn:  () => casesService.getById(id),
     enabled:  !!id,
-    // Access as: data?.case
   });
 }
 
 export function useSubmitCase() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: casesService.submit,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['cases'] }),
-    // Response: { case: { id, tracking_code, ... } }
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cases'] });
+    },
   });
 }
