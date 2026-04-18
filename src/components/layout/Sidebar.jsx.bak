@@ -84,5 +84,3 @@ export default function Sidebar() {
     </aside>
   );
 }
-
-// TODO: Add reviewer nav link - see UWAZI deployment guide

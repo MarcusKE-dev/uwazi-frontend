@@ -1,286 +1,204 @@
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import axiosInstance from "../../services/axiosInstance";
+import { useState }        from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { reviewerService }  from '../../api/reviewer.service';
+import { StatusBadge }     from '../../components/ui/Badge';
+import Spinner             from '../../components/ui/Spinner';
+import { fmtDateTime }     from '../../utils/formatDate';
+import { formatKES }       from '../../utils/formatKES';
+import { toast }           from '../../store/notificationStore';
 
 const ACTIONS = [
-  { status: "under_review", label: "Mark Under Review",  bg: "#1d4ed8" },
-  { status: "flagged",      label: "Flag as Fraud",      bg: "#c2410c" },
-  { status: "escalated",    label: "Escalate to EACC",   bg: "#991b1b" },
-  { status: "resolved",     label: "Mark Resolved",      bg: "#166534" },
-  { status: "dismissed",    label: "Dismiss Case",       bg: "#6b7280" },
+  { status: 'under_review', label: 'Under Review',  cls: 'bg-amber-500 hover:bg-amber-600' },
+  { status: 'flagged',      label: 'Flag as Fraud', cls: 'bg-orange-600 hover:bg-orange-700' },
+  { status: 'escalated',    label: 'Escalate to EACC', cls: 'bg-red-600 hover:bg-red-700' },
+  { status: 'resolved',     label: 'Mark Resolved', cls: 'bg-green-600 hover:bg-green-700' },
+  { status: 'dismissed',    label: 'Dismiss',       cls: 'bg-slate-500 hover:bg-slate-600' },
 ];
 
-// Shared field row component for the case details card
-const Field = ({ label, value }) => (
-  <div>
-    <dt style={{ fontSize: "11px", color: "#9ca3af", textTransform: "uppercase",
-      letterSpacing: ".06em", marginBottom: "2px" }}>
-      {label}
-    </dt>
-    <dd style={{ margin: 0, fontWeight: 500, color: "#1a1a1a" }}>
-      {value || <span style={{ color: "#d1d5db", fontWeight: 400 }}>—</span>}
-    </dd>
-  </div>
-);
+export default function ReviewerCase() {
+  const { id }        = useParams();
+  const navigate      = useNavigate();
+  const queryClient   = useQueryClient();
+  const [notes, setNotes] = useState('');
 
-const ReviewerCase = () => {
-  const { id }       = useParams();
-  const navigate     = useNavigate();
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [notes, setNotes]     = useState("");
-  const [working, setWorking] = useState(false);
-  const [flash, setFlash]     = useState(null); // { type: "ok"|"err", msg }
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['reviewer-case', id],
+    queryFn:  () => reviewerService.getCaseDetail(id),
+  });
 
-  useEffect(() => {
-    axiosInstance.get(`/reviewer/cases/${id}`)
-      .then(r  => setData(r.data.data))
-      .catch(e => setFlash({ type: "err",
-        msg: e.response?.data?.error?.message || e.message }))
-      .finally(() => setLoading(false));
-  }, [id]);
+  const mutation = useMutation({
+    mutationFn: ({ status, notes }) =>
+      reviewerService.updateStatus(id, status, notes),
+    onSuccess: (_, { status }) => {
+      queryClient.invalidateQueries({ queryKey: ['reviewer-case', id] });
+      queryClient.invalidateQueries({ queryKey: ['reviewer-queue'] });
+      toast.success(`Status updated to "${status.replace(/_/g, ' ')}". Citizen notified.`);
+      setNotes('');
+    },
+    onError: (err) =>
+      toast.error(typeof err === 'string' ? err : err?.message ?? 'Update failed'),
+  });
 
-  const updateStatus = async (status) => {
+  const handleUpdate = (status) => {
     if (!window.confirm(
-      `Set this case status to "${status.replace(/_/g," ")}"?\n\nThis will be recorded in the audit trail and the citizen will be notified by email.`
+      `Set status to "${status.replace(/_/g, ' ')}"?\n\nThis is recorded in the audit trail and the citizen will be notified by email.`
     )) return;
-
-    setWorking(true);
-    setFlash(null);
-    try {
-      const r = await axiosInstance.patch(`/reviewer/cases/${id}/status`,
-        { status, notes });
-      setData(prev => ({ ...prev, status: r.data.data.case.status }));
-      setNotes("");
-      setFlash({ type: "ok",
-        msg: `Status updated to "${status.replace(/_/g," ")}". Citizen notified.` });
-    } catch (e) {
-      setFlash({ type: "err",
-        msg: e.response?.data?.error?.message || e.message });
-    } finally {
-      setWorking(false);
-    }
+    mutation.mutate({ status, notes });
   };
 
-  if (loading) return (
-    <div style={{ padding: "48px", textAlign: "center", color: "#9ca3af" }}>
-      Loading case…
+  if (isLoading) return <div className="p-8 flex justify-center"><Spinner /></div>;
+
+  if (error) return (
+    <div className="p-6">
+      <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+        ⚠ {typeof error === 'string' ? error : error?.message ?? 'Failed to load case'}
+      </div>
     </div>
   );
 
-  const c = data;
+  const c = data?.data;
+  if (!c) return null;
+
+  const thCls   = 'px-4 py-3 text-xs font-bold text-white bg-uwazi-navy text-left';
+  const cellCls = 'px-4 py-3 text-sm text-slate-700 dark:text-blue-200';
 
   return (
-    <div style={{ padding: "32px", maxWidth: "860px", fontFamily: "inherit" }}>
-      {/* Back nav */}
+    <div className="p-6 max-w-4xl space-y-6">
+      {/* Back */}
       <button
-        onClick={() => navigate("/reviewer")}
-        style={{ background: "none", border: "none", color: "#6b7280",
-          cursor: "pointer", fontSize: "14px", padding: 0, marginBottom: "20px",
-          display: "flex", alignItems: "center", gap: "4px" }}
+        onClick={() => navigate('/reviewer')}
+        className="text-sm text-slate-500 dark:text-blue-400 hover:text-slate-800 dark:hover:text-white flex items-center gap-1 transition-colors"
       >
         ← Back to Queue
       </button>
 
-      {/* Case header */}
-      {c && (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between",
-            alignItems: "flex-start", marginBottom: "24px", gap: "16px",
-            flexWrap: "wrap" }}>
-            <div>
-              <span style={{ fontFamily: "monospace", color: "#059669",
-                fontSize: "12px", fontWeight: 600 }}>
-                {c.tracking_code}
-              </span>
-              <h1 style={{ fontSize: "20px", fontWeight: 600,
-                margin: "4px 0 0", letterSpacing: "-.01em" }}>
-                {c.title}
-              </h1>
-              <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#6b7280" }}>
-                Submitted by {c.submitted_by || "Anonymous"} ·{" "}
-                {new Date(c.created_at).toLocaleDateString("en-KE",
-                  { dateStyle: "long" })}
-              </p>
-            </div>
-            <span style={{
-              background: "#fffbeb", color: "#92400e",
-              border: "1px solid #fde68a",
-              padding: "5px 14px", borderRadius: "14px",
-              fontSize: "13px", fontWeight: 500,
-              textTransform: "capitalize", whiteSpace: "nowrap"
-            }}>
-              {c.status?.replace(/_/g, " ")}
-            </span>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+            {c.tracking_code}
+          </span>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white mt-1">
+            {c.title}
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-blue-400 mt-1">
+            Submitted by {c.submitted_by ?? 'Anonymous'} · {fmtDateTime(c.created_at)}
+          </p>
+        </div>
+        <StatusBadge status={c.status} />
+      </div>
+
+      {/* Details grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          ['Ministry',         c.ministry],
+          ['Amount involved',  c.amount_involved ? formatKES(c.amount_involved) : null],
+          ['Reviewer',         c.reviewer_name],
+          ['Assigned',         c.assigned_at ? fmtDateTime(c.assigned_at) : null],
+        ].map(([label, val]) => (
+          <div key={label}
+            className="bg-white dark:bg-uwazi-dark border border-slate-200 dark:border-blue-900/50 rounded-xl p-4">
+            <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">{label}</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">
+              {val ?? <span className="text-slate-300 font-normal">—</span>}
+            </p>
           </div>
+        ))}
+      </div>
 
-          {/* Flash message */}
-          {flash && (
-            <div style={{
-              padding: "12px 16px", borderRadius: "8px", marginBottom: "20px",
-              fontSize: "14px", lineHeight: "1.5",
-              background: flash.type === "ok" ? "#f0fdf4" : "#fef2f2",
-              color:      flash.type === "ok" ? "#166534"  : "#dc2626",
-              border: `1px solid ${flash.type === "ok" ? "#bbf7d0" : "#fecaca"}`
-            }}>
-              {flash.type === "ok" ? "✓ " : "⚠ "}{flash.msg}
-            </div>
-          )}
-
-          {/* Details grid */}
-          <dl style={{
-            display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: "16px", background: "#f9fafb",
-            border: "1px solid #e5e7eb", borderRadius: "8px",
-            padding: "20px", marginBottom: "24px"
-          }}>
-            <Field label="Ministry"
-              value={c.ministry} />
-            <Field label="Amount involved"
-              value={c.amount_involved
-                ? `KSh ${Number(c.amount_involved).toLocaleString("en-KE")}`
-                : null} />
-            <Field label="Reviewer"
-              value={c.reviewer_name} />
-            <Field label="Assigned on"
-              value={c.assigned_at
-                ? new Date(c.assigned_at).toLocaleDateString("en-KE")
-                : null} />
-          </dl>
-
-          {/* Description */}
-          {c.description && (
-            <div style={{ marginBottom: "24px" }}>
-              <h3 style={{ fontSize: "13px", fontWeight: 600,
-                color: "#374151", textTransform: "uppercase",
-                letterSpacing: ".06em", marginBottom: "10px" }}>
-                Description
-              </h3>
-              <p style={{ color: "#4b5563", lineHeight: "1.75", margin: 0,
-                fontSize: "14px" }}>
-                {c.description}
-              </p>
-            </div>
-          )}
-
-          {/* Evidence */}
-          {c.evidence?.length > 0 && (
-            <div style={{ marginBottom: "24px" }}>
-              <h3 style={{ fontSize: "13px", fontWeight: 600,
-                color: "#374151", textTransform: "uppercase",
-                letterSpacing: ".06em", marginBottom: "10px" }}>
-                Evidence ({c.evidence.length})
-              </h3>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {c.evidence.map(ev => (
-                  <a key={ev.id} href={ev.file_url} target="_blank" rel="noreferrer"
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: "6px",
-                      background: "#eff6ff", color: "#1d4ed8",
-                      border: "1px solid #bfdbfe",
-                      padding: "6px 14px", borderRadius: "6px",
-                      textDecoration: "none", fontSize: "13px"
-                    }}>
-                    📎 {ev.original_filename || "View file"}
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Case history */}
-          {c.updates?.length > 0 && (
-            <div style={{ marginBottom: "24px" }}>
-              <h3 style={{ fontSize: "13px", fontWeight: 600,
-                color: "#374151", textTransform: "uppercase",
-                letterSpacing: ".06em", marginBottom: "10px" }}>
-                Case History
-              </h3>
-              <div style={{
-                border: "1px solid #e5e7eb", borderRadius: "8px", overflow: "hidden"
-              }}>
-                {c.updates.map((u, i) => (
-                  <div key={i} style={{
-                    display: "flex", gap: "16px",
-                    padding: "14px 16px", fontSize: "13px",
-                    borderBottom: i < c.updates.length - 1
-                      ? "1px solid #f3f4f6" : "none",
-                    background: i % 2 === 0 ? "#fff" : "#fafafa"
-                  }}>
-                    <div style={{
-                      width: "2px", flexShrink: 0, alignSelf: "stretch",
-                      background: "#e5e7eb", borderRadius: "1px"
-                    }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 500, textTransform: "capitalize" }}>
-                        {u.status?.replace(/_/g, " ")}
-                      </div>
-                      <div style={{ color: "#9ca3af", fontSize: "12px", marginTop: "2px" }}>
-                        {u.updated_by_name || "System"} ·{" "}
-                        {new Date(u.created_at).toLocaleString("en-KE")}
-                      </div>
-                      {u.notes && (
-                        <div style={{ color: "#4b5563", marginTop: "4px" }}>
-                          {u.notes}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Status update panel */}
-          <div style={{
-            background: "#fff", border: "1px solid #e5e7eb",
-            borderRadius: "10px", padding: "24px"
-          }}>
-            <h3 style={{ fontSize: "14px", fontWeight: 600,
-              margin: "0 0 14px" }}>
-              Update Status
-            </h3>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Add reviewer notes (optional — will be stored in case history)…"
-              rows={3}
-              style={{
-                width: "100%", padding: "10px 12px",
-                border: "1px solid #d1d5db", borderRadius: "6px",
-                fontSize: "14px", fontFamily: "inherit",
-                resize: "vertical", marginBottom: "14px",
-                boxSizing: "border-box", outline: "none"
-              }}
-            />
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {ACTIONS.map(a => {
-                const isCurrent = c.status === a.status;
-                return (
-                  <button
-                    key={a.status}
-                    onClick={() => updateStatus(a.status)}
-                    disabled={working || isCurrent}
-                    style={{
-                      padding: "8px 18px", borderRadius: "6px",
-                      border: "none", fontSize: "13px", fontWeight: 500,
-                      cursor: working || isCurrent ? "not-allowed" : "pointer",
-                      background: isCurrent ? "#f3f4f6" : a.bg,
-                      color:      isCurrent ? "#9ca3af" : "#fff",
-                      opacity:    working ? 0.7 : 1,
-                      transition: "opacity .15s"
-                    }}
-                  >
-                    {isCurrent ? `✓ ${a.label}` : a.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </>
+      {/* Description */}
+      {c.description && (
+        <div className="bg-white dark:bg-uwazi-dark border border-slate-200 dark:border-blue-900/50 rounded-xl p-5">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">
+            Description
+          </h3>
+          <p className="text-sm text-slate-700 dark:text-blue-200 leading-relaxed">
+            {c.description}
+          </p>
+        </div>
       )}
+
+      {/* Evidence */}
+      {c.evidence?.length > 0 && (
+        <div className="bg-white dark:bg-uwazi-dark border border-slate-200 dark:border-blue-900/50 rounded-xl p-5">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">
+            Evidence ({c.evidence.length})
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {c.evidence.map((ev) => (
+              <a key={ev.id} href={ev.file_url} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors">
+                📎 {ev.original_filename ?? 'View file'}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Case history */}
+      {c.updates?.length > 0 && (
+        <div className="bg-white dark:bg-uwazi-dark border border-slate-200 dark:border-blue-900/50 rounded-xl overflow-hidden">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide px-5 py-4 border-b border-slate-100 dark:border-blue-900/30">
+            Case History
+          </h3>
+          {c.updates.map((u, i) => (
+            <div key={i}
+              className={`flex gap-4 px-5 py-4 text-sm ${
+                i < c.updates.length - 1
+                  ? 'border-b border-slate-100 dark:border-blue-900/20' : ''
+              }`}>
+              <div className="w-0.5 bg-slate-200 dark:bg-blue-900/40 self-stretch rounded-full flex-shrink-0 mt-1" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium capitalize text-slate-800 dark:text-white">
+                  {u.status?.replace(/_/g, ' ')}
+                </p>
+                <p className="text-xs text-slate-400 dark:text-blue-500 mt-0.5">
+                  {u.updated_by_name ?? 'System'} · {fmtDateTime(u.created_at)}
+                </p>
+                {u.notes && (
+                  <p className="text-slate-600 dark:text-blue-300 text-xs mt-1.5 leading-relaxed">
+                    {u.notes}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Status update panel */}
+      <div className="bg-white dark:bg-uwazi-dark border border-slate-200 dark:border-blue-900/50 rounded-xl p-5">
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-4">
+          Update Status
+        </h3>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Add reviewer notes (optional — stored in case history and visible to citizen)…"
+          rows={3}
+          className="w-full px-3 py-2.5 text-sm border border-slate-200 dark:border-blue-900/50 rounded-lg bg-white dark:bg-uwazi-dark text-slate-700 dark:text-blue-200 placeholder-slate-400 dark:placeholder-blue-600 outline-none focus:ring-2 focus:ring-uwazi-sky/30 resize-y mb-4"
+        />
+        <div className="flex flex-wrap gap-2">
+          {ACTIONS.map((a) => {
+            const isCurrent = c.status === a.status;
+            return (
+              <button
+                key={a.status}
+                onClick={() => handleUpdate(a.status)}
+                disabled={mutation.isPending || isCurrent}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors
+                  ${isCurrent
+                    ? 'bg-slate-200 dark:bg-blue-900/30 text-slate-400 dark:text-blue-600 cursor-not-allowed'
+                    : `${a.cls} disabled:opacity-60 disabled:cursor-not-allowed`
+                  }`}
+              >
+                {isCurrent ? `✓ ${a.label}` : a.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
-};
-
-export default ReviewerCase;
+}

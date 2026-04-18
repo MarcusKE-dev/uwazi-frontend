@@ -1,4 +1,3 @@
-import React from 'react';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminService }     from '../../api/admin.service';
@@ -10,7 +9,7 @@ import { fmtDateTime } from '../../utils/formatDate';
 import { toast }   from '../../store/notificationStore';
 import { formatKES } from '../../utils/formatKES';
 
-const TABS = ['Cases', 'Assign Cases', 'Users', 'Audit Log'];
+const TABS = ['Cases', 'Users', 'Audit Log'];
 const ROLES = ['citizen', 'reviewer', 'admin', 'super_admin'];
 
 export default function AdminDashboard() {
@@ -51,39 +50,10 @@ export default function AdminDashboard() {
     onError: (err) => toast.error(err?.message ?? 'Update failed'),
   });
 
-
-  // Unassigned cases (for Assign Cases tab)
-  const { data: unassignedRes, isLoading: unassignedLoading, refetch: refetchUnassigned } = useQuery({
-    queryKey: ['admin-unassigned'],
-    queryFn:  adminService.getUnassigned,
-  });
-
-  // Reviewers list (for assignment dropdown)
-  const { data: reviewersRes } = useQuery({
-    queryKey: ['admin-reviewers'],
-    queryFn:  adminService.getReviewers,
-  });
-
-  // Assign case mutation
-  const assignCase = useMutation({
-    mutationFn: ({ caseId, reviewerId }) =>
-      adminService.assignCase(caseId, reviewerId),
-    onSuccess: () => {
-      refetchUnassigned();
-      queryClient.invalidateQueries({ queryKey: ['admin-reviewers'] });
-      toast.success('Case assigned successfully');
-    },
-    onError: (err) => toast.error(err?.message ?? 'Assignment failed'),
-  });
-
-  const [selectedReviewer, setSelectedReviewer] = React.useState({});
-
   const stats    = statsRes?.data;
   const cases    = casesRes?.data?.cases ?? [];
   const users    = usersRes?.data?.users ?? [];
-  const auditLog    = auditRes?.data?.logs      ?? [];
-  const unassigned  = unassignedRes?.data?.cases   ?? [];
-  const reviewers   = reviewersRes?.data?.reviewers ?? [];
+  const auditLog = auditRes?.data?.logs  ?? [];
 
   const cellCls = "px-4 py-3 text-sm text-slate-700 dark:text-blue-200";
   const thCls   = "px-4 py-3 text-xs font-bold text-white bg-uwazi-navy text-left";
@@ -152,72 +122,7 @@ export default function AdminDashboard() {
         </div>
       ))}
 
-
-      {/* Assign Cases tab */}
-      {tab === 'Assign Cases' && (unassignedLoading ? <Spinner /> : (
-        <div className="space-y-4">
-          {unassigned.length === 0 ? (
-            <div className="text-center py-16 text-slate-400 dark:text-blue-500 text-sm">
-              ✓ All cases have been assigned — nothing in the queue
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-blue-900/50">
-              <table className="w-full text-sm">
-                <thead><tr>
-                  {['Code', 'Title', 'Ministry', 'Filed', 'Assign to', ''].map((h) => (
-                    <th key={h} className={thCls}>{h}</th>
-                  ))}
-                </tr></thead>
-                <tbody>
-                  {unassigned.map((c) => (
-                    <tr key={c.id} className="border-t border-slate-100 dark:border-blue-900/20 hover:bg-slate-50 dark:hover:bg-uwazi-mid/30">
-                      <td className={`${cellCls} font-mono text-xs text-emerald-600 dark:text-emerald-400 font-semibold`}>
-                        {c.tracking_code}
-                      </td>
-                      <td className={cellCls}>
-                        <p className="max-w-xs truncate">{c.title}</p>
-                      </td>
-                      <td className={`${cellCls} text-xs`}>{c.ministry ?? '—'}</td>
-                      <td className={`${cellCls} text-xs`}>{fmtDateTime(c.created_at)}</td>
-                      <td className={cellCls}>
-                        <select
-                          value={selectedReviewer[c.id] ?? ''}
-                          onChange={(e) =>
-                            setSelectedReviewer((prev) => ({ ...prev, [c.id]: e.target.value }))
-                          }
-                          className="text-xs border border-slate-200 dark:border-blue-900/50 rounded-lg px-2 py-1.5 bg-white dark:bg-uwazi-dark outline-none min-w-[160px]"
-                        >
-                          <option value="">Select reviewer…</option>
-                          {reviewers.map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.full_name} ({r.active_cases} active)
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className={cellCls}>
-                        <button
-                          onClick={() => {
-                            const rid = selectedReviewer[c.id];
-                            if (!rid) { toast.error('Select a reviewer first'); return; }
-                            assignCase.mutate({ caseId: c.id, reviewerId: rid });
-                          }}
-                          disabled={assignCase.isPending || !selectedReviewer[c.id]}
-                          className="px-3 py-1.5 bg-uwazi-navy hover:bg-uwazi-mid disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
-                        >
-                          Assign
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      ))}
-
-      {/* Users tab */
+      {/* Users tab */}
       {tab === 'Users' && (usersLoading ? <Spinner /> : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-blue-900/50">
           <table className="w-full text-sm">
