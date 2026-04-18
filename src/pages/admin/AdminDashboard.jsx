@@ -1,47 +1,53 @@
-import React from 'react';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminService }     from '../../api/admin.service';
 import { analyticsService } from '../../api/analytics.service';
 import { casesService }     from '../../api/cases.service';
 import { StatusBadge, RoleBadge } from '../../components/ui/Badge';
-import Spinner    from '../../components/ui/Spinner';
-import { fmtDateTime } from '../../utils/formatDate';
-import { toast }   from '../../store/notificationStore';
-import { formatKES } from '../../utils/formatKES';
+import Spinner              from '../../components/ui/Spinner';
+import { fmtDateTime }      from '../../utils/formatDate';
+import { toast }            from '../../store/notificationStore';
+import { formatKES }        from '../../utils/formatKES';
 
-const TABS = ['Cases', 'Assign Cases', 'Users', 'Audit Log'];
+const TABS  = ['Cases', 'Assign Cases', 'Users', 'Audit Log'];
 const ROLES = ['citizen', 'reviewer', 'admin', 'super_admin'];
 
 export default function AdminDashboard() {
-  const [tab, setTab] = useState('Cases');
-  const queryClient   = useQueryClient();
+  const [tab, setTab]                         = useState('Cases');
+  const [selectedReviewer, setSelectedReviewer] = useState({});
+  const queryClient                           = useQueryClient();
 
-  // Stats from /analytics/stats (correct — no /admin/stats endpoint)
   const { data: statsRes } = useQuery({
     queryKey: ['analytics-stats'],
     queryFn:  analyticsService.getStats,
   });
 
-  // Cases via public /cases (no /admin/cases endpoint)
   const { data: casesRes, isLoading: casesLoading } = useQuery({
     queryKey: ['cases', { limit: 50 }],
     queryFn:  () => casesService.getAll({ limit: 50 }),
   });
 
-  // Users via /admin/users
   const { data: usersRes, isLoading: usersLoading } = useQuery({
     queryKey: ['admin-users'],
     queryFn:  adminService.getUsers,
   });
 
-  // Audit log via /admin/audit-log
   const { data: auditRes, isLoading: auditLoading } = useQuery({
     queryKey: ['audit-log'],
     queryFn:  adminService.getAuditLog,
   });
 
-  // Role change mutation (super_admin only)
+  const { data: unassignedRes, isLoading: unassignedLoading,
+          refetch: refetchUnassigned } = useQuery({
+    queryKey: ['admin-unassigned'],
+    queryFn:  adminService.getUnassigned,
+  });
+
+  const { data: reviewersRes } = useQuery({
+    queryKey: ['admin-reviewers'],
+    queryFn:  adminService.getReviewers,
+  });
+
   const roleChange = useMutation({
     mutationFn: ({ id, role }) => adminService.updateRole(id, role),
     onSuccess: () => {
@@ -51,20 +57,6 @@ export default function AdminDashboard() {
     onError: (err) => toast.error(err?.message ?? 'Update failed'),
   });
 
-
-  // Unassigned cases (for Assign Cases tab)
-  const { data: unassignedRes, isLoading: unassignedLoading, refetch: refetchUnassigned } = useQuery({
-    queryKey: ['admin-unassigned'],
-    queryFn:  adminService.getUnassigned,
-  });
-
-  // Reviewers list (for assignment dropdown)
-  const { data: reviewersRes } = useQuery({
-    queryKey: ['admin-reviewers'],
-    queryFn:  adminService.getReviewers,
-  });
-
-  // Assign case mutation
   const assignCase = useMutation({
     mutationFn: ({ caseId, reviewerId }) =>
       adminService.assignCase(caseId, reviewerId),
@@ -76,14 +68,12 @@ export default function AdminDashboard() {
     onError: (err) => toast.error(err?.message ?? 'Assignment failed'),
   });
 
-  const [selectedReviewer, setSelectedReviewer] = React.useState({});
-
-  const stats    = statsRes?.data;
-  const cases    = casesRes?.data?.cases ?? [];
-  const users    = usersRes?.data?.users ?? [];
-  const auditLog    = auditRes?.data?.logs      ?? [];
-  const unassigned  = unassignedRes?.data?.cases   ?? [];
-  const reviewers   = reviewersRes?.data?.reviewers ?? [];
+  const stats      = statsRes?.data;
+  const cases      = casesRes?.data?.cases      ?? [];
+  const users      = usersRes?.data?.users       ?? [];
+  const auditLog   = auditRes?.data?.logs        ?? [];
+  const unassigned = unassignedRes?.data?.cases   ?? [];
+  const reviewers  = reviewersRes?.data?.reviewers ?? [];
 
   const cellCls = "px-4 py-3 text-sm text-slate-700 dark:text-blue-200";
   const thCls   = "px-4 py-3 text-xs font-bold text-white bg-uwazi-navy text-left";
@@ -94,7 +84,7 @@ export default function AdminDashboard() {
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Admin Panel</h1>
       </div>
 
-      {/* Stats summary */}
+      {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
@@ -152,19 +142,18 @@ export default function AdminDashboard() {
         </div>
       ))}
 
-
       {/* Assign Cases tab */}
       {tab === 'Assign Cases' && (unassignedLoading ? <Spinner /> : (
         <div className="space-y-4">
           {unassigned.length === 0 ? (
-            <div className="text-center py-16 text-slate-400 dark:text-blue-500 text-sm">
-              ✓ All cases have been assigned — nothing in the queue
-            </div>
+            <p className="text-center text-slate-400 py-16 text-sm">
+              All cases assigned — queue is empty
+            </p>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-blue-900/50">
               <table className="w-full text-sm">
                 <thead><tr>
-                  {['Code', 'Title', 'Ministry', 'Filed', 'Assign to', ''].map((h) => (
+                  {['Code','Title','Ministry','Filed','Assign to',''].map((h) => (
                     <th key={h} className={thCls}>{h}</th>
                   ))}
                 </tr></thead>
@@ -217,7 +206,7 @@ export default function AdminDashboard() {
         </div>
       ))}
 
-      {/* Users tab */
+      {/* Users tab */}
       {tab === 'Users' && (usersLoading ? <Spinner /> : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-blue-900/50">
           <table className="w-full text-sm">
