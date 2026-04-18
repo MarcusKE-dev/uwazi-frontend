@@ -17,8 +17,6 @@ import SubmitCasePage from './pages/cases/SubmitCasePage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import NotFoundPage   from './pages/NotFoundPage';
 
-import ReviewerQueue from './pages/reviewer/ReviewerQueue';
-import ReviewerCase  from './pages/reviewer/ReviewerCase';
 export default function App() {
   return (
     <Routes>
@@ -48,15 +46,6 @@ export default function App() {
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />
-    
-      {/* Reviewer routes — reviewer, admin, super_admin */}
-      <Route element={<ProtectedRoute allowedRoles={['reviewer', 'admin', 'super_admin']} />}>
-        <Route element={<AppLayout />}>
-          <Route path="/reviewer"           element={<ReviewerQueue />} />
-          <Route path="/reviewer/cases/:id" element={<ReviewerCase />} />
-        </Route>
-      </Route>
-
     </Routes>
   );
 }
